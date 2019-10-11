@@ -1,4 +1,4 @@
-//===-------- LoopOptTutorial.cpp - Loop Opt Tutorial Pass ------*- C++ -*-===//
+//===-------- LoopOptTutorial.h - Loop Opt Tutorial Pass ------*- C++ -*-===//
 //
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -7,9 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 /// \file
-/// This file contains a small loop pass to used to illustrate several aspects
-/// writing a loop optimization. It was developed as part of the "Writing a Loop
-/// Optimization" tutorial, presented at LLVM Devepeloper's Conference, 2019.
+/// This file contains a small loop pass to be used to illustrate several
+/// aspects about writing a loop optimization. It was developed as part of the
+/// "Writing a Loop Optimization" tutorial, presented at LLVM Devepeloper's
+/// Conference, 2019.
 //===----------------------------------------------------------------------===
 
 #ifndef LLVM_TRANSFORMS_SCALAR_LOOPOPTTUTORIAL_H

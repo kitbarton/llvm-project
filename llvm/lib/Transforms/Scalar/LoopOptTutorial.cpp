@@ -7,9 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 /// \file
-/// This file contains a small loop pass to used to illustrate several aspects
-/// writing a loop optimization. It was developed as part of the "Writing a Loop
-/// Optimization" tutorial, presented at LLVM Devepeloper's Conference, 2019.
+/// This file contains a small loop pass to be used to illustrate several
+/// aspects about writing a loop optimization. It was developed as part of the
+/// "Writing a Loop Optimization" tutorial, presented at LLVM Devepeloper's
+/// Conference, 2019.
 //===----------------------------------------------------------------------===
 
 #include "llvm/Transforms/Scalar/LoopOptTutorial.h"
@@ -24,7 +25,7 @@ using namespace llvm;
 
 PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
                                            LoopStandardAnalysisResults &AR,
-                                           LPMUpdater &) {
+                                           LPMUpdater &U) {
   bool Changed = false;
 
   LLVM_DEBUG(dbgs() << "Entering LoopOptTutorialPass::run\n");
