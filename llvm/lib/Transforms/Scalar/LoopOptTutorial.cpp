@@ -41,9 +41,43 @@ static Loop *myCloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
 //
 
 bool LoopSplit::run(Loop &L) const {
-  // TODO:  filter non-candidates & diagnose them
+  LLVM_DEBUG(dbgs() << "Entering " << __func__ << "\n");
+
+  if (!isCandidate(L)) {
+    LLVM_DEBUG(dbgs() << "Loop " << L.getName()
+                      << " is not a candidate for splitting.\n");
+    return false;
+  }
+
+  LLVM_DEBUG(dbgs() << "Loop " << L.getName()
+                    << " is a candidate for splitting!\n");
 
   return splitLoopInHalf(L);
+}
+
+bool LoopSplit::isCandidate(const Loop &L) const {
+  // Require loops with preheaders and dedicated exits
+  if (!L.isLoopSimplifyForm())
+    return false;
+
+  // Since we use cloning to split the loop, it has to be safe to clone
+  if (!L.isSafeToClone())
+    return false;
+
+  // If the loop has multiple exiting blocks, do not split
+  if (!L.getExitingBlock())
+    return false;
+
+  // If loop has multiple exit blocks, do not split.
+  if (!L.getExitBlock())
+    return false;
+
+  // Only split innermost loops. Thus, if the loop has any children, it cannot
+  // be split.
+  if (!L.getSubLoops().empty())
+    return false;
+
+  return true;
 }
 
 bool LoopSplit::splitLoopInHalf(Loop &L) const {
@@ -68,7 +102,8 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   return true;
 }
 
-Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore, BasicBlock &Pred) const {
+Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
+                           BasicBlock &Pred) const {
   // Clone the original loop, insert the clone before the "InsertBefore" BB.
   SmallVector<BasicBlock *, 4> ClonedLoopBlocks;
   ValueToValueMapTy VMap;

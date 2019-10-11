@@ -31,10 +31,13 @@ class LoopSplit {
 public:
   LoopSplit(LoopInfo &LI, ScalarEvolution &SE) : LI(LI), SE(SE) {}
 
-  // Excute the transformation on the loop nest rooted by \p L.
+  // Execute the transformation on the loop nest rooted by \p L.
   bool run(Loop &L) const;
 
 private:
+  /// Determines if \p L is a candidate for splitting
+  bool isCandidate(const Loop &L) const;
+
   /// Split the given loop in the middle by creating a new loop that traverse
   /// the first half of the original iteration space and adjusting the loop
   /// bounds of \p L to traverse the remaining half.
