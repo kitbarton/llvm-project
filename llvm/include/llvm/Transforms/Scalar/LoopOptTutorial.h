@@ -18,11 +18,32 @@
 
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
+#include "llvm/Analysis/LoopInfo.h"
 
 namespace llvm {
 
 class Loop;
 class LPMUpdater;
+
+/// This class splits the innermost loop in a loop nest in the middle.
+class LoopSplit {
+public:
+  LoopSplit(LoopInfo &LI) : LI(LI) {}
+
+  bool run(Loop &L) const;
+
+private:
+  ///
+  bool splitLoop(Loop &L) const;
+
+  /// Clone the loop rooted by \p L.
+  Loop *cloneLoop(Loop &L, BasicBlock &Preheader, BasicBlock &Pred,
+                  ValueToValueMapTy &VMap) const;
+
+ private:
+  LoopInfo &LI;
+};
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {
 public:
