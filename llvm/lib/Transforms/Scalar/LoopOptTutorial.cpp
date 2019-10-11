@@ -23,22 +23,15 @@ using namespace llvm;
 
 #define DEBUG_TYPE "loop-opt-tutorial"
 
-namespace {
-class LoopSplit {
-public:
-  LoopSplit(Loop &L) : L(L) {}
+bool LoopSplit::run(Loop &L) const {
 
-  bool splitLoop() {
-    LLVM_DEBUG(dbgs() << "Entering " << __func__ << "\n");
-    LLVM_DEBUG(dbgs() << "Not implemented yet\n");
-    return false;
-  }
+  LLVM_DEBUG(dbgs() << "Entering " << __func__ << "\n");
 
-private:
-  Loop &L;
-};
+  LLVM_DEBUG(dbgs() << "TODO: Need to check if Loop is a valid candidate\n");
 
-} // namespace
+  return false;
+}
+
 PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
                                            LoopStandardAnalysisResults &AR,
                                            LPMUpdater &U) {
@@ -47,9 +40,9 @@ PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
   LLVM_DEBUG(dbgs() << "Entering LoopOptTutorialPass::run\n");
   LLVM_DEBUG(dbgs() << "Loop: "; L.dump(); dbgs() << "\n");
 
-  LoopSplit LS(L);
+  LoopSplit LS(AR.LI);
 
-  Changed = LS.splitLoop();
+  Changed = LS.run(L);
 
   if (!Changed)
     return PreservedAnalyses::all();

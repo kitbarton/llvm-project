@@ -18,11 +18,22 @@
 
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
 
 namespace llvm {
 
 class Loop;
 class LPMUpdater;
+
+class LoopSplit {
+public:
+  LoopSplit(LoopInfo &LI) : LI(LI) {}
+
+  bool run(Loop &L) const;
+
+private:
+  LoopInfo &LI;
+};
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {
 public:
