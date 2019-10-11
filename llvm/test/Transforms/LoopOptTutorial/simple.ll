@@ -4,7 +4,6 @@
 @B = common global [1024 x i32] zeroinitializer, align 16
 
 ; CHECK: Entering LoopOptTutorialPass::run
-; CHECK: Entering LoopOptTutorialPass::run
 define void @dep_free(i32* noalias %arg) {
 bb:
   br label %bb5
@@ -31,31 +30,6 @@ bb14:                                             ; preds = %bb7
   %tmp15 = add nuw nsw i32 %.01, 1
   br label %bb5
 
-bb17:                                             ; preds = %bb27, %bb5
-  %indvars.iv = phi i64 [ %indvars.iv.next, %bb27 ], [ 0, %bb5 ]
-  %.0 = phi i32 [ 0, %bb5 ], [ %tmp28, %bb27 ]
-  %exitcond = icmp ne i64 %indvars.iv, 100
-  br i1 %exitcond, label %bb19, label %bb18
-
-bb18:                                             ; preds = %bb17
-  br label %bb29
-
-bb19:                                             ; preds = %bb17
-  %tmp20 = add nsw i32 %.0, -3
-  %tmp21 = add nuw nsw i64 %indvars.iv, 3
-  %tmp22 = trunc i64 %tmp21 to i32
-  %tmp23 = mul nsw i32 %tmp20, %tmp22
-  %tmp24 = trunc i64 %indvars.iv to i32
-  %tmp25 = srem i32 %tmp23, %tmp24
-  %tmp26 = getelementptr inbounds [1024 x i32], [1024 x i32]* @B, i64 0, i64 %indvars.iv
-  store i32 %tmp25, i32* %tmp26, align 4
-  br label %bb27
-
-bb27:                                             ; preds = %bb19
-  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
-  %tmp28 = add nuw nsw i32 %.0, 1
-  br label %bb17
-
-bb29:                                             ; preds = %bb18
+bb17:                                             ; preds = %bb5
   ret void
 }

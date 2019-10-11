@@ -29,20 +29,32 @@ class LPMUpdater;
 /// This class splits the innermost loop in a loop nest in the middle.
 class LoopSplit {
 public:
-  LoopSplit(LoopInfo &LI) : LI(LI) {}
+  LoopSplit(LoopInfo &LI, ScalarEvolution &SE) : LI(LI), SE(SE) {}
 
+  // Excute the transformation on the loop nest rooted by \p L.
   bool run(Loop &L) const;
 
 private:
-  ///
-  bool splitLoop(Loop &L) const;
+  /// Split the given loop in the middle by creating a new loop that traverse
+  /// the first half of the original iteration space and adjusting the loop
+  /// bounds of \p L to traverse the remaining half.
+  /// Note: \p L is expected to be the innermost loop in a loop nest or a top
+  /// level loop.
+  bool splitLoopInHalf(Loop &L) const;
 
-  /// Clone the loop rooted by \p L.
-  Loop *cloneLoop(Loop &L, BasicBlock &Preheader, BasicBlock &Pred,
-                  ValueToValueMapTy &VMap) const;
+  /// Clone loop \p L and insert the cloned loop before the basic block \p
+  /// InsertBefore, \p Pred is the predecessor of \p L.
+  /// Note: \p L is expected to be the innermost loop in a loop nest or a top
+  /// level loop.
+  Loop *cloneLoop(Loop &L, BasicBlock &InsertBefore, BasicBlock &Pred) const;
+
+  // Dump the LLVM IR for function containing the given loop \p L.
+  void dumpLoopFunction(const StringRef Msg, const Loop &L) const;
 
  private:
   LoopInfo &LI;
+  ScalarEvolution &SE;
+  DominatorTree *DT = nullptr;
 };
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {
