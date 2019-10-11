@@ -27,9 +27,40 @@ bool LoopSplit::run(Loop &L) const {
 
   LLVM_DEBUG(dbgs() << "Entering " << __func__ << "\n");
 
-  LLVM_DEBUG(dbgs() << "TODO: Need to check if Loop is a valid candidate\n");
+  if (isCandidate(L))
+    LLVM_DEBUG(dbgs() << "Loop " << L.getName()
+                      << " is a candidate for splitting!\n");
+  else
+    LLVM_DEBUG(dbgs() << "Loop " << L.getName()
+                      << " is not a candidate for splitting.\n");
 
   return false;
+}
+
+bool LoopSplit::isCandidate(const Loop &L) const {
+  // Require loops with preheaders and dedicated exits
+  if (!L.isLoopSimplifyForm())
+    return false;
+
+  // Since we use cloning to split the loop, it has to be safe to clone
+  if (!L.isSafeToClone())
+    return false;
+
+  // If the loop has multiple exiting blocks, do not split
+  if (!L.getExitingBlock())
+    return false;
+
+  // If loop has multiple exit blocks, do not split.
+  if (!L.getExitBlock())
+    return false;
+
+  // Only split innermost loops. Thus, if the loop has any children, it cannot
+  // be split.
+  //auto Children = L.getSubLoops();
+  if (!L.getSubLoops().empty())
+    return false;
+
+  return true;
 }
 
 PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
