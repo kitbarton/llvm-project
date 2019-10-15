@@ -14,13 +14,14 @@
 //===----------------------------------------------------------------------===
 
 #include "llvm/Transforms/Scalar/LoopOptTutorial.h"
+#include "llvm/Analysis/IVDescriptors.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace llvm;
 
@@ -56,11 +57,11 @@ bool LoopSplit::run(Loop &L) const {
 }
 
 bool LoopSplit::isCandidate(const Loop &L) const {
-  // Require loops with preheaders and dedicated exits
+  // Require loops with preheaders and dedicated exits.
   if (!L.isLoopSimplifyForm())
     return false;
 
-  // Since we use cloning to split the loop, it has to be safe to clone
+  // Since we use cloning to split the loop, it has to be safe to clone.
   if (!L.isSafeToClone())
     return false;
 
@@ -90,7 +91,7 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   BasicBlock *Pred = Preheader;
   DEBUG_WITH_TYPE(VerboseDebug,
                   dumpLoopFunction("Before splitting preheader:\n", L););
-  BasicBlock *InsertBefore = SplitBlock(Preheader, Preheader->getTerminator(), DT);
+  BasicBlock *InsertBefore = SplitBlock(Preheader, Preheader->getTerminator(), &DT);
   DEBUG_WITH_TYPE(VerboseDebug,
                   dumpLoopFunction("After splitting preheader:\n", L););
 
@@ -98,6 +99,18 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   Loop *ClonedLoop = cloneLoop(L, *InsertBefore, *Pred);
   DEBUG_WITH_TYPE(VerboseDebug,
                   dumpLoopFunction("After cloning the loop:\n", L););
+
+  // Modify the upper bound of the cloned loop.
+  Instruction *Split =
+    computeSplitPoint(L, ClonedLoop->getLoopPreheader()->getTerminator());
+  ICmpInst *LatchCmpInst = getLatchCmpInst(*ClonedLoop);
+  assert(LatchCmpInst && "Unable to find the latch comparison instruction");
+  LatchCmpInst->setOperand(1, Split);
+
+  // Modify the lower bound of the original loop.
+  PHINode *IndVar = L.getInductionVariable(SE);
+  assert(IndVar && "Unable to find the induction variable PHI node");
+  IndVar->setIncomingValueForBlock(L.getLoopPreheader(), Split);
 
   return true;
 }
@@ -107,8 +120,17 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   // Clone the original loop, insert the clone before the "InsertBefore" BB.
   SmallVector<BasicBlock *, 4> ClonedLoopBlocks;
   ValueToValueMapTy VMap;
+
+#ifdef BUG
+  // Same as cloneLoopWithPreheader but does not update the dominator tree.
+  // Consequently code that requires scalar evolution computation will fail.
   Loop *NewLoop = myCloneLoopWithPreheader(&InsertBefore, &Pred, &L, VMap,
-                                           "ClonedLoop", &LI, ClonedLoopBlocks);
+                                           "", &LI, ClonedLoopBlocks);
+#else
+  Loop *NewLoop = cloneLoopWithPreheader(&InsertBefore, &Pred, &L, VMap,
+                                         "", &LI, &DT, ClonedLoopBlocks);
+#endif
+
   assert(NewLoop && "Run ot of memory");
   DEBUG_WITH_TYPE(VerboseDebug,
                   dbgs() << "Create new loop: " << NewLoop->getName() << "\n";
@@ -131,6 +153,30 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   //DT.changeImmediateDominator(&Preheader, NewLoop->getExitingBlock());
 
   return NewLoop;
+}
+
+Instruction *LoopSplit::computeSplitPoint(const Loop &L,
+                                          Instruction *InsertBefore) const {
+  Optional<Loop::LoopBounds> Bounds = L.getBounds(SE);
+  assert(Bounds.hasValue() && "Unable to retrieve the loop bounds");
+
+  Value &IVInitialVal = Bounds->getInitialIVValue();
+  Value &IVFinalVal = Bounds->getFinalIVValue();
+  auto *Sub =
+    BinaryOperator::Create(Instruction::Sub, &IVFinalVal, &IVInitialVal, "", InsertBefore);
+
+  return BinaryOperator::Create(Instruction::UDiv, Sub,
+                                ConstantInt::get(IVFinalVal.getType(), 2),
+                                "", InsertBefore);
+}
+
+ICmpInst *LoopSplit::getLatchCmpInst(const Loop &L) const {
+  if (BasicBlock *Latch = L.getLoopLatch())
+    if (BranchInst *BI = dyn_cast_or_null<BranchInst>(Latch->getTerminator()))
+      if (BI->isConditional())
+        return dyn_cast<ICmpInst>(BI->getCondition());
+
+  return nullptr;
 }
 
 void LoopSplit::dumpLoopFunction(const StringRef Msg, const Loop &L) const {
@@ -219,7 +265,7 @@ PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
   LLVM_DEBUG(dbgs() << "Entering LoopOptTutorialPass::run\n");
   LLVM_DEBUG(dbgs() << "Loop: "; L.dump(); dbgs() << "\n");
 
-  bool Changed = LoopSplit(AR.LI, AR.SE).run(L);
+  bool Changed = LoopSplit(AR.LI, AR.SE, AR.DT).run(L);
 
   if (!Changed)
     return PreservedAnalyses::all();
