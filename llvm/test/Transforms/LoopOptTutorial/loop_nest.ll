@@ -1,4 +1,4 @@
-; RUN: opt -S -passes=loop-opt-tutorial -debug-only=loop-opt-tutorial < %s 2>&1 | FileCheck %s
+; RUN: opt -S -passes='loop(rotate,loop-opt-tutorial)' -debug-only=loop-opt-tutorial < %s 2>&1 | FileCheck %s
 ; REQUIRES: asserts
 ;
 ; Opts: -correlated-propagation -mem2reg -instcombine -loop-simplify -indvars -instnamer
@@ -18,66 +18,82 @@
 @A = common dso_local global [1024 x [1024 x i32]] zeroinitializer, align 4
 @B = common dso_local global [1024 x [1024 x i32]] zeroinitializer, align 4
 
-; CHECK: Entering LoopOptTutorialPass::run
-; CHECK: Loop at depth 2
-; CHECK: Entering LoopOptTutorialPass::run
-; CHECK: Loop at depth 1
-; CHECK: Loop at depth 2
-define dso_local void @dep_free() {
+; CHECK-LABEL: dep_free
+; CHECK-LABEL: entry:
+; CHECK-NEXT:   br label %[[I_HEADER:.*]]
+; CHECK:      [[I_HEADER:.*]]:
+; CHECK-NEXT:   [[I:%i[0-9]*]] = phi i64 [ 0, %entry ], [ [[INCI:%inci[0-9]*]], %[[I_LATCH:.*]] ]
+; CHECK-NEXT:   br label %[[L1_PREHEADER:.*]]
+; First loop:
+;    for (long j = 0; j < 100/2; ++j)
+;        ...
+; CHECK:      [[L1_PREHEADER]]:
+; CHECK-NEXT:   [[SUB:%[0-9]*]] = sub i64 100, 0
+; CHECK-NEXT:   [[SPLIT:%[0-9]*]] = udiv i64 [[SUB]], 2
+; CHECK-NEXT:   br label %[[L1_HEADER:.*]]
+; CHECK:      [[L1_HEADER]]:
+; CHECK-NEXT:   [[L1_J:%j[0-9]*]] = phi i64 [ 0, %[[L1_PREHEADER]] ], [ [[L1_INCJ:%incj[0-9]*]], %[[L1_LATCH:.*]] ]
+; CHECK:      br label %[[L1_LATCH]]
+; CHECK:      [[L1_LATCH]]:
+; CHECK-NEXT:   [[L1_INCJ]] = add nuw nsw i64 [[L1_J]], 1
+; CHECK-NEXT:   [[L1_CMP:%exitcond[0-9]*]] = icmp ne i64 [[L1_INCJ]], [[SPLIT]]
+; CHECK-NEXT:   br i1 [[L1_CMP]], label %[[L1_HEADER]], label %[[L2_PREHEADER:.*]]
+
+; Second loop:
+;    for (long j = 100/2; j < 100; ++j)
+;        ...
+; CHECK:      [[L2_PREHEADER]]:
+; CHECK-NEXT:   br label %[[L2_HEADER:.*]]
+; CHECK:      [[L2_HEADER]]:
+; CHECK-NEXT:   [[L2_J:%j[0-9]*]] = phi i64 [ [[SPLIT]], %[[L2_PREHEADER]] ], [ [[L2_INCJ:%incj[0-9]*]], %[[L2_LATCH:.*]] ]
+; CHECK:      br label %[[L2_LATCH]]
+; CHECK:      [[L2_LATCH]]:
+; CHECK-NEXT:   [[L2_INCJ]] = add nuw nsw i64 [[L2_J]], 1
+; CHECK-NEXT:   [[L2_CMP:%exitcond[0-9]*]] = icmp ne i64 [[L2_INCJ]], 100
+; CHECK-NEXT:   br i1 [[L2_CMP]], label %[[L2_HEADER]], label %[[I_LATCH:.*]]
+
+; CHECK:      [[I_LATCH]]:
+; CHECK-NEXT:   [[INCI]] = add nuw nsw i64 [[I]], 1
+; CHECK-NEXT:   [[I_CMP:%exitcond[0-9]*]] = icmp ne i64 [[INCI]], 100
+; CHECK-NEXT:   br i1 [[I_CMP]], label %[[I_HEADER]], label %[[EXIT:.*]]
+
+; CHECK:      [[EXIT]]:
+
+define void @dep_free() {
 entry:
-  br label %for.cond
+  br label %i_header
 
-for.cond:                                         ; preds = %for.inc7, %entry
-  %indvars.iv1 = phi i64 [ %indvars.iv.next2, %for.inc7 ], [ 0, %entry ]
-  %i.0 = phi i32 [ 0, %entry ], [ %inc8, %for.inc7 ]
-  %exitcond5 = icmp ne i64 %indvars.iv1, 100
-  br i1 %exitcond5, label %for.body, label %for.cond.cleanup
+i_header:
+  %i = phi i64 [ %inci, %i_latch ], [ 0, %entry ]
+  %exitcond5 = icmp ne i64 %i, 100
+  br i1 %exitcond5, label %j_header, label %exit
 
-for.cond.cleanup:                                 ; preds = %for.cond
-  br label %for.end9
+j_header:       
+  %j = phi i64 [ %incj, %j_latch ], [ 0, %i_header ]
+  %exitcond = icmp ne i64 %j, 100
+  br i1 %exitcond, label %j_body, label %i_latch
 
-for.body:                                         ; preds = %for.cond
-  br label %for.cond1
+j_body:        
+  %sub = add nsw i64 %i, -3
+  %tmp = add nuw nsw i64 %i, 3
+  %mul = mul nsw i64 %sub, %tmp
+  %rem = srem i64 %mul, %i
+  %arrayidx6 = getelementptr inbounds [1024 x [1024 x i32]], [1024 x [1024 x i32]]* @A, i64 0, i64 %i, i64 %j
+  %tmp7 = trunc i64 %sub to i32
+  store i32 %tmp7, i32* %arrayidx6, align 4, !tbaa !2
+  br label %j_latch
 
-for.cond1:                                        ; preds = %for.inc, %for.body
-  %indvars.iv = phi i64 [ %indvars.iv.next, %for.inc ], [ 0, %for.body ]
-  %exitcond = icmp ne i64 %indvars.iv, 100
-  br i1 %exitcond, label %for.body4, label %for.cond.cleanup3
+j_latch:
+  %incj = add nuw nsw i64 %j, 1
+  br label %j_header
 
-for.cond.cleanup3:                                ; preds = %for.cond1
-  br label %for.end
+i_latch:         
+  %inci = add nuw nsw i64 %i, 1
+  br label %i_header
 
-for.body4:                                        ; preds = %for.cond1
-  %sub = add nsw i32 %i.0, -3
-  %tmp = add nuw nsw i64 %indvars.iv1, 3
-  %tmp6 = trunc i64 %tmp to i32
-  %mul = mul nsw i32 %sub, %tmp6
-  %tmp7 = trunc i64 %indvars.iv1 to i32
-  %rem = srem i32 %mul, %tmp7
-  %arrayidx6 = getelementptr inbounds [1024 x [1024 x i32]], [1024 x [1024 x i32]]* @A, i64 0, i64 %indvars.iv1, i64 %indvars.iv
-  store i32 %rem, i32* %arrayidx6, align 4, !tbaa !2
-  br label %for.inc
-
-for.inc:                                          ; preds = %for.body4
-  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
-  br label %for.cond1
-
-for.end:                                          ; preds = %for.cond.cleanup3
-  br label %for.inc7
-
-for.inc7:                                         ; preds = %for.end
-  %indvars.iv.next2 = add nuw nsw i64 %indvars.iv1, 1
-  %inc8 = add nuw nsw i32 %i.0, 1
-  br label %for.cond
-
-for.end9:                                         ; preds = %for.cond.cleanup
+exit:         
   ret void
 }
-
-declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture)
-
-declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture)
-
 
 !llvm.module.flags = !{!0}
 !llvm.ident = !{!1}

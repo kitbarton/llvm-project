@@ -29,7 +29,8 @@ class LPMUpdater;
 /// This class splits the innermost loop in a loop nest in the middle.
 class LoopSplit {
 public:
-  LoopSplit(LoopInfo &LI, ScalarEvolution &SE) : LI(LI), SE(SE) {}
+  LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT)
+      : LI(LI), SE(SE), DT(DT) {}
 
   // Execute the transformation on the loop nest rooted by \p L.
   bool run(Loop &L) const;
@@ -51,13 +52,22 @@ private:
   /// level loop.
   Loop *cloneLoop(Loop &L, BasicBlock &InsertBefore, BasicBlock &Pred) const;
 
-  // Dump the LLVM IR for function containing the given loop \p L.
-  void dumpLoopFunction(const StringRef Msg, const Loop &L) const;
+  /// Compute the point where to split the loop \p L. Return the instruction
+  /// calculating the split point.
+  Instruction *computeSplitPoint(const Loop &L,
+                                 Instruction *InsertBefore) const;
+
+
+  /// Get the latch comparison instruction of loop \p L.
+  ICmpInst *getLatchCmpInst(const Loop &L) const;
+
+  // Dump the LLVM IR for function \p F.
+  void dumpFunction(const StringRef Msg, const Function &F) const;
 
  private:
   LoopInfo &LI;
   ScalarEvolution &SE;
-  DominatorTree *DT = nullptr;
+  DominatorTree &DT;
 };
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {

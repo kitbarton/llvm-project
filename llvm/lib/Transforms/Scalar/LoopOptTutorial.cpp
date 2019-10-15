@@ -28,6 +28,11 @@ using namespace llvm;
 #define DEBUG_TYPE "loop-opt-tutorial"
 static const char *VerboseDebug = DEBUG_TYPE "-verbose";
 
+static cl::opt<bool>
+    Verify(DEBUG_TYPE "-verify", cl::Hidden,
+           cl::desc("Turn on DominatorTree and LoopInfo verification"),
+           cl::init(false));
+
 /// Clones a loop \p OrigLoop.  Returns the loop and the blocks in \p
 /// Blocks.
 /// Updates LoopInfo assuming the loop is dominated by block \p LoopDomBB.
@@ -86,19 +91,19 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   assert(L.isSafeToClone() && "Loop is not safe to be cloned");
   assert(L.getSubLoops().empty() && "Expecting a innermost loop");
 
+  LLVM_DEBUG(dbgs() << "Splitting loop " << L.getName() << "\n");
+  const Function &F = *L.getHeader()->getParent();
+
   // Split the loop preheader to create an insertion point for the cloned loop.
   BasicBlock *Preheader = L.getLoopPreheader();
   BasicBlock *Pred = Preheader;
+  BasicBlock *InsertBefore =
+      SplitBlock(Preheader, Preheader->getTerminator(), &DT, &LI);
   DEBUG_WITH_TYPE(VerboseDebug,
-                  dumpLoopFunction("Before splitting preheader:\n", L););
-  BasicBlock *InsertBefore = SplitBlock(Preheader, Preheader->getTerminator(), &DT);
-  DEBUG_WITH_TYPE(VerboseDebug,
-                  dumpLoopFunction("After splitting preheader:\n", L););
+                  dumpFunction("After splitting preheader:\n", F););
 
   // Clone the original loop.
   Loop *ClonedLoop = cloneLoop(L, *InsertBefore, *Pred);
-  DEBUG_WITH_TYPE(VerboseDebug,
-                  dumpLoopFunction("After cloning the loop:\n", L););
 
   // Modify the upper bound of the cloned loop.
   Instruction *Split =
@@ -112,12 +117,16 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   assert(IndVar && "Unable to find the induction variable PHI node");
   IndVar->setIncomingValueForBlock(L.getLoopPreheader(), Split);
 
+  DEBUG_WITH_TYPE(VerboseDebug,
+                  dumpFunction("After splitting the loop:\n", F););
+
   return true;
 }
 
 Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
                            BasicBlock &Pred) const {
   // Clone the original loop, insert the clone before the "InsertBefore" BB.
+  const Function &F = *L.getHeader()->getParent();
   SmallVector<BasicBlock *, 4> ClonedLoopBlocks;
   ValueToValueMapTy VMap;
 
@@ -134,23 +143,34 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   assert(NewLoop && "Run ot of memory");
   DEBUG_WITH_TYPE(VerboseDebug,
                   dbgs() << "Create new loop: " << NewLoop->getName() << "\n";
-                  dumpLoopFunction("After cloning loop:\n", L););
+                  dumpFunction("After cloning loop:\n", F););
 
   // Update instructions referencing the original loop basic blocks to
   // reference the corresponding block in the cloned loop.
   VMap[L.getExitBlock()] = &InsertBefore;
   remapInstructionsInBlocks(ClonedLoopBlocks, VMap);
-  DEBUG_WITH_TYPE(
-      VerboseDebug, dumpLoopFunction("After instruction remapping:\n", L););
+  DEBUG_WITH_TYPE(VerboseDebug,
+                  dumpFunction("After instruction remapping:\n", F););
 
   // Make the predecessor of original loop jump to the cloned loop.
   Pred.getTerminator()->replaceUsesOfWith(&InsertBefore,
                                           NewLoop->getLoopPreheader());
 
-  // Update the immediate dominator for the origianl loop with the exiting block
+  // Update the immediate dominator for the original loop with the exiting block
   // of the new loop created. Dominance within the loop is updated in
   // cloneLoopWithPreheader.
-  //DT.changeImmediateDominator(&Preheader, NewLoop->getExitingBlock());
+  DT.changeImmediateDominator(&InsertBefore, NewLoop->getExitingBlock());
+  assert(DT.verify(DominatorTree::VerificationLevel::Fast) &&
+         "Dominator tree is invalid");
+
+  if (Verify) {
+    L.verifyLoop();
+    NewLoop->verifyLoop();
+    if (L.getParentLoop())
+      L.getParentLoop()->verifyLoop();
+
+    LI.verify(DT);
+  }
 
   return NewLoop;
 }
@@ -179,8 +199,7 @@ ICmpInst *LoopSplit::getLatchCmpInst(const Loop &L) const {
   return nullptr;
 }
 
-void LoopSplit::dumpLoopFunction(const StringRef Msg, const Loop &L) const {
-  const Function &F = *L.getHeader()->getParent();
+void LoopSplit::dumpFunction(const StringRef Msg, const Function &F) const {
   dbgs() << Msg;
   F.dump();
 }
