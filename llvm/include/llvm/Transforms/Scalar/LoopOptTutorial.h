@@ -61,6 +61,12 @@ private:
   /// Get the latch comparison instruction of loop \p L.
   ICmpInst *getLatchCmpInst(const Loop &L) const;
 
+  /// Update the dominator tree after cloning the loop.
+  void updateDominatorTree(const Loop &OrigLoop, const Loop &ClonedLoop,
+                           BasicBlock &InsertBefore,
+                           BasicBlock &Pred,
+                           ValueToValueMapTy &VMap) const;
+
   // Dump the LLVM IR for function \p F.
   void dumpFunction(const StringRef Msg, const Function &F) const;
 

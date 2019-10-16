@@ -91,8 +91,12 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   assert(L.isSafeToClone() && "Loop is not safe to be cloned");
   assert(L.getSubLoops().empty() && "Expecting a innermost loop");
 
-  LLVM_DEBUG(dbgs() << "Splitting loop " << L.getName() << "\n");
   const Function &F = *L.getHeader()->getParent();
+  LLVM_DEBUG(dbgs() << "Splitting loop " << L.getName() << "\n");
+
+  // Generate the code that computes the split point.
+  Instruction *Split =
+    computeSplitPoint(L, L.getLoopPreheader()->getTerminator());
 
   // Split the loop preheader to create an insertion point for the cloned loop.
   BasicBlock *Preheader = L.getLoopPreheader();
@@ -102,12 +106,10 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
   DEBUG_WITH_TYPE(VerboseDebug,
                   dumpFunction("After splitting preheader:\n", F););
 
-  // Clone the original loop.
+  // Clone the original loop, and insert the clone before the original loop.
   Loop *ClonedLoop = cloneLoop(L, *InsertBefore, *Pred);
 
   // Modify the upper bound of the cloned loop.
-  Instruction *Split =
-    computeSplitPoint(L, ClonedLoop->getLoopPreheader()->getTerminator());
   ICmpInst *LatchCmpInst = getLatchCmpInst(*ClonedLoop);
   assert(LatchCmpInst && "Unable to find the latch comparison instruction");
   LatchCmpInst->setOperand(1, Split);
@@ -130,15 +132,11 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   SmallVector<BasicBlock *, 4> ClonedLoopBlocks;
   ValueToValueMapTy VMap;
 
-#ifdef BUG
   // Same as cloneLoopWithPreheader but does not update the dominator tree.
-  // Consequently code that requires scalar evolution computation will fail.
+  // Use for education purposes only, use cloneLoopWithPreheader in production
+  // code.
   Loop *NewLoop = myCloneLoopWithPreheader(&InsertBefore, &Pred, &L, VMap,
                                            "", &LI, ClonedLoopBlocks);
-#else
-  Loop *NewLoop = cloneLoopWithPreheader(&InsertBefore, &Pred, &L, VMap,
-                                         "", &LI, &DT, ClonedLoopBlocks);
-#endif
 
   assert(NewLoop && "Run ot of memory");
   DEBUG_WITH_TYPE(VerboseDebug,
@@ -156,14 +154,15 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   Pred.getTerminator()->replaceUsesOfWith(&InsertBefore,
                                           NewLoop->getLoopPreheader());
 
-  // Update the immediate dominator for the original loop with the exiting block
-  // of the new loop created. Dominance within the loop is updated in
-  // cloneLoopWithPreheader.
-  DT.changeImmediateDominator(&InsertBefore, NewLoop->getExitingBlock());
-  assert(DT.verify(DominatorTree::VerificationLevel::Fast) &&
-         "Dominator tree is invalid");
 
+  // Now that we have cloned the loop we need to update the dominator tree.
+  updateDominatorTree(L, *NewLoop, InsertBefore, Pred, VMap);
+
+  // Verify that the dominator tree and the loops are correct.
   if (Verify) {
+    assert(DT.verify(DominatorTree::VerificationLevel::Fast) &&
+           "Dominator tree is invalid");
+
     L.verifyLoop();
     NewLoop->verifyLoop();
     if (L.getParentLoop())
@@ -197,6 +196,31 @@ ICmpInst *LoopSplit::getLatchCmpInst(const Loop &L) const {
         return dyn_cast<ICmpInst>(BI->getCondition());
 
   return nullptr;
+}
+
+void LoopSplit::updateDominatorTree(const Loop &OrigLoop,
+                                    const Loop &ClonedLoop,
+                                    BasicBlock &InsertBefore,
+                                    BasicBlock &Pred,
+                                    ValueToValueMapTy &VMap) const {
+  // Add the basic block that belongs to the cloned loop we have created to the
+  // dominator tree.
+  BasicBlock *NewPH = ClonedLoop.getLoopPreheader();
+  assert(NewPH && "Expecting a valid preheader");
+
+  DT.addNewBlock(NewPH, &Pred);
+  for (BasicBlock *BB : ClonedLoop.getBlocks())
+    DT.addNewBlock(BB, NewPH);
+
+  // Now update the immediate dominator of the cloned loop blocks.
+  for (BasicBlock *BB : OrigLoop.getBlocks()) {
+    BasicBlock *IDomBB = DT.getNode(BB)->getIDom()->getBlock();
+    DT.changeImmediateDominator(cast<BasicBlock>(VMap[BB]),
+                                cast<BasicBlock>(VMap[IDomBB]));
+  }
+
+  // The cloned loop exiting block now dominates the original loop.
+  DT.changeImmediateDominator(&InsertBefore, ClonedLoop.getExitingBlock());
 }
 
 void LoopSplit::dumpFunction(const StringRef Msg, const Function &F) const {
