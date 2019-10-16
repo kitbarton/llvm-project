@@ -23,13 +23,13 @@
 ; CHECK-NEXT:   br label %[[I_HEADER:.*]]
 ; CHECK:      [[I_HEADER:.*]]:
 ; CHECK-NEXT:   [[I:%i[0-9]*]] = phi i64 [ 0, %entry ], [ [[INCI:%inci[0-9]*]], %[[I_LATCH:.*]] ]
+; CHECK-NEXT:   [[SUB:%[0-9]*]] = sub i64 100, 0
+; CHECK-NEXT:   [[SPLIT:%[0-9]*]] = udiv i64 [[SUB]], 2
 ; CHECK-NEXT:   br label %[[L1_PREHEADER:.*]]
 ; First loop:
 ;    for (long j = 0; j < 100/2; ++j)
 ;        ...
 ; CHECK:      [[L1_PREHEADER]]:
-; CHECK-NEXT:   [[SUB:%[0-9]*]] = sub i64 100, 0
-; CHECK-NEXT:   [[SPLIT:%[0-9]*]] = udiv i64 [[SUB]], 2
 ; CHECK-NEXT:   br label %[[L1_HEADER:.*]]
 ; CHECK:      [[L1_HEADER]]:
 ; CHECK-NEXT:   [[L1_J:%j[0-9]*]] = phi i64 [ 0, %[[L1_PREHEADER]] ], [ [[L1_INCJ:%incj[0-9]*]], %[[L1_LATCH:.*]] ]
