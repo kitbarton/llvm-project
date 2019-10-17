@@ -156,7 +156,9 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
 
 
   // Now that we have cloned the loop we need to update the dominator tree.
-  updateDominatorTree(L, *NewLoop, InsertBefore, Pred, VMap);
+  //updateDominatorTree(L, *NewLoop, InsertBefore, Pred, VMap);
+
+  DT.recalculate(*L.getHeader()->getParent());
 
   // Verify that the dominator tree and the loops are correct.
   if (Verify) {
