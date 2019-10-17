@@ -14,8 +14,10 @@
 //===----------------------------------------------------------------------===
 
 #include "llvm/Transforms/Scalar/LoopOptTutorial.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/IVDescriptors.h"
 #include "llvm/Analysis/LoopPass.h"
+#include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
@@ -33,6 +35,14 @@ static cl::opt<bool>
            cl::desc("Turn on DominatorTree and LoopInfo verification"),
            cl::init(false));
 
+STATISTIC(LoopSplitted, "Loop has been splitted");
+STATISTIC(LoopNotSplitted, "Failed to split the loop");
+STATISTIC(NotInSimplifiedForm, "Loop not in simplified form");
+STATISTIC(UnsafeToClone, "Loop cannot be safely cloned");
+STATISTIC(NotUniqueExitingBlock, "Loop doesn't have a unique exiting block");
+STATISTIC(NotUniqueExitBlock, "Loop doesn't have a unique exit block");
+STATISTIC(NotInnerMostLoop, "Loop is not an innermost loop");
+
 /// Clones a loop \p OrigLoop.  Returns the loop and the blocks in \p
 /// Blocks.
 /// Updates LoopInfo assuming the loop is dominated by block \p LoopDomBB.
@@ -47,46 +57,44 @@ static Loop *myCloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
 //
 
 bool LoopSplit::run(Loop &L) const {
-  LLVM_DEBUG(dbgs() << "Entering " << __func__ << "\n");
-
-  if (!isCandidate(L)) {
-    LLVM_DEBUG(dbgs() << "Loop " << L.getName()
-                      << " is not a candidate for splitting.\n");
+  // First analyze the loop and prune invalid candidates.
+  if (!isCandidate(L))
     return false;
-  }
 
-  LLVM_DEBUG(dbgs() << "Loop " << L.getName()
-                    << " is a candidate for splitting!\n");
+  // Attempt to split the loop and report the result.
+  if (!splitLoop(L))
+    reportFailure(L, LoopNotSplitted);
 
-  return splitLoopInHalf(L);
+  reportSuccess(L, LoopSplitted);
+  return true;
 }
 
 bool LoopSplit::isCandidate(const Loop &L) const {
   // Require loops with preheaders and dedicated exits.
   if (!L.isLoopSimplifyForm())
-    return false;
+    return reportInvalidCandidate(L, NotInSimplifiedForm);
 
   // Since we use cloning to split the loop, it has to be safe to clone.
   if (!L.isSafeToClone())
-    return false;
+    return reportInvalidCandidate(L, UnsafeToClone);
 
   // If the loop has multiple exiting blocks, do not split
   if (!L.getExitingBlock())
-    return false;
+    return reportInvalidCandidate(L, NotUniqueExitingBlock);
 
   // If loop has multiple exit blocks, do not split.
   if (!L.getExitBlock())
-    return false;
+    return reportInvalidCandidate(L, NotUniqueExitBlock);
 
   // Only split innermost loops. Thus, if the loop has any children, it cannot
   // be split.
   if (!L.getSubLoops().empty())
-    return false;
+    return reportInvalidCandidate(L, NotInnerMostLoop);
 
   return true;
 }
 
-bool LoopSplit::splitLoopInHalf(Loop &L) const {
+bool LoopSplit::splitLoop(Loop &L) const {
   assert(L.isLoopSimplifyForm() && "Expecting a loop in simplify form");
   assert(L.isSafeToClone() && "Loop is not safe to be cloned");
   assert(L.getSubLoops().empty() && "Expecting a innermost loop");
@@ -223,6 +231,34 @@ void LoopSplit::updateDominatorTree(const Loop &OrigLoop,
   DT.changeImmediateDominator(&InsertBefore, ClonedLoop.getExitingBlock());
 }
 
+bool LoopSplit::reportInvalidCandidate(const Loop &L, Statistic &Stat) const {
+  assert(L.getLoopPreheader() && "Expecting loop with a preheader");
+  ++Stat;
+  ORE.emit(OptimizationRemarkAnalysis(DEBUG_TYPE, Stat.getName(),
+                                      L.getStartLoc(), L.getLoopPreheader())
+           << "[" << L.getLoopPreheader()->getParent()->getName() << "]: "
+           << "Loop is not a candidate for splitting: " << Stat.getDesc());
+  return false;
+}
+
+void LoopSplit::reportSuccess(const Loop &L, Statistic &Stat) const {
+  assert(L.getLoopPreheader() && "Expecting loop with a preheader");
+  ++Stat;
+  ORE.emit(OptimizationRemark(DEBUG_TYPE, Stat.getName(), L.getStartLoc(),
+                              L.getLoopPreheader())
+           << "[" << L.getLoopPreheader()->getParent()->getName()
+           << "]: " << Stat.getDesc());
+}
+
+void LoopSplit::reportFailure(const Loop &L, Statistic &Stat) const {
+  assert(L.getLoopPreheader() && "Expecting loop with a preheader");
+  ++Stat;
+  ORE.emit(OptimizationRemarkMissed(DEBUG_TYPE, Stat.getName(), L.getStartLoc(),
+                                    L.getLoopPreheader())
+           << "[" << L.getLoopPreheader()->getParent()->getName()
+           << "]: " << Stat.getDesc());
+}
+
 void LoopSplit::dumpFunction(const StringRef Msg, const Function &F) const {
   dbgs() << Msg;
   F.dump();
@@ -305,10 +341,18 @@ static Loop *myCloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
 PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
                                            LoopStandardAnalysisResults &AR,
                                            LPMUpdater &U) {
+  // Retrieve a function analysis manager to get a cached OptimizationRemarkEmitter.
+  const auto &FAM =
+    LAM.getResult<FunctionAnalysisManagerLoopProxy>(L, AR).getManager();
+  Function *F = L.getHeader()->getParent();
+  auto *ORE = FAM.getCachedResult<OptimizationRemarkEmitterAnalysis>(*F);
+  if (!ORE)
+    report_fatal_error("OptimizationRemarkEmitterAnalysis was not cached");
+
   LLVM_DEBUG(dbgs() << "Entering LoopOptTutorialPass::run\n");
   LLVM_DEBUG(dbgs() << "Loop: "; L.dump(); dbgs() << "\n");
 
-  bool Changed = LoopSplit(AR.LI, AR.SE, AR.DT).run(L);
+  bool Changed = LoopSplit(AR.LI, AR.SE, AR.DT, *ORE).run(L);
 
   if (!Changed)
     return PreservedAnalyses::all();
