@@ -1,5 +1,4 @@
-; RUN: opt -S -passes='loop(rotate,loop-opt-tutorial)' -debug-only=loop-opt-tutorial < %s 2>&1 | FileCheck %s
-; REQUIRES: asserts
+; RUN: opt -S -passes='require<opt-remark-emit>,loop(rotate,loop-opt-tutorial)' < %s 2>&1 | FileCheck %s
 ;
 ; Opts: -correlated-propagation -mem2reg -instcombine -loop-simplify -indvars -instnamer
 ;
