@@ -70,7 +70,7 @@ PreservedAnalyses LoopOptTutorialPass::run(Loop &L, LoopAnalysisManager &LAM,
   LLVM_DEBUG(dbgs() << "Entering LoopOptTutorialPass::run\n");
   LLVM_DEBUG(dbgs() << "Loop: "; L.dump(); dbgs() << "\n");
 
-  bool Changed = LS(AR.LI).run(L);
+  bool Changed = LoopSplit(AR.LI).run(L);
 
   if (!Changed)
     return PreservedAnalyses::all();
