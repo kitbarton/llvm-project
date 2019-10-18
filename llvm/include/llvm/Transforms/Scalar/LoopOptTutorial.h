@@ -17,9 +17,9 @@
 #define LLVM_TRANSFORMS_SCALAR_LOOPOPTTUTORIAL_H
 
 #include "llvm/Analysis/LoopAnalysisManager.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
-#include "llvm/Analysis/LoopInfo.h"
 
 namespace llvm {
 
@@ -28,6 +28,7 @@ class LPMUpdater;
 
 /// This class splits the innermost loop in a loop nest in the middle.
 class LoopSplit {
+private:
 public:
   LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT)
       : LI(LI), SE(SE), DT(DT) {}
@@ -57,20 +58,18 @@ private:
   Instruction *computeSplitPoint(const Loop &L,
                                  Instruction *InsertBefore) const;
 
-
   /// Get the latch comparison instruction of loop \p L.
   ICmpInst *getLatchCmpInst(const Loop &L) const;
 
   /// Update the dominator tree after cloning the loop.
   void updateDominatorTree(const Loop &OrigLoop, const Loop &ClonedLoop,
-                           BasicBlock &InsertBefore,
-                           BasicBlock &Pred,
+                           BasicBlock &InsertBefore, BasicBlock &Pred,
                            ValueToValueMapTy &VMap) const;
 
   // Dump the LLVM IR for function \p F.
   void dumpFunction(const StringRef Msg, const Function &F) const;
 
- private:
+private:
   LoopInfo &LI;
   ScalarEvolution &SE;
   DominatorTree &DT;
