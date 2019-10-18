@@ -243,32 +243,23 @@ void LoopSplit::updateDominatorTree(const Loop &OrigLoop,
   BasicBlock *NewPH = ClonedLoop.getLoopPreheader();
   assert(NewPH && "Expecting a valid preheader");
 
-  TreeUpdates.emplace_back(
-      DominatorTree::UpdateType(DominatorTree::Insert, &Pred, NewPH));
+  TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, &Pred, OrigLoop.getLoopPreheader()));
+  TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, &Pred, NewPH));
 
-#if 0
-  for (BasicBlock *BB : ClonedLoop.getBlocks())
-    TreeUpdates.emplace_back(
-                             DominatorTree::UpdateType(DominatorTree::Insert, NewPH, BB));
-#endif
-
-#if 1
+  // Go through every block in the cloned loop and add the dominator.
+  // The dominator is the immediate dominator from the corresponding block in
+  // the original loop.
   for (BasicBlock *BB : OrigLoop.getBlocks()) {
     BasicBlock *IDomBB = DT.getNode(BB)->getIDom()->getBlock();
-    assert(VMap[IDomBB] && "Expecting immediate dominator of loop block to have been mapped.");
-    TreeUpdates.emplace_back(DominatorTree::UpdateType(
-                                                       DominatorTree::Insert, cast<BasicBlock> VMap[IDomBB], cast<BasicBlock>(VMap[BB])));
+    assert(VMap[IDomBB] &&
+           "Expecting immediate dominator of loop block to have been mapped.");
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, cast<BasicBlock>(VMap[IDomBB]), cast<BasicBlock>(VMap[BB])));
   }
-#endif
 
   assert(&InsertBefore == OrigLoop.getLoopPreheader() &&
          "Expecting InsertBefore to be the Preheader!!");
 
   // The cloned loop exiting block now dominates the original loop
-  TreeUpdates.emplace_back(DominatorTree::UpdateType(
-      DominatorTree::Delete,
-      DT.getNode(OrigLoop.getLoopPreheader())->getIDom()->getBlock(),
-      OrigLoop.getLoopPreheader()));
   TreeUpdates.emplace_back(DominatorTree::UpdateType(
       DominatorTree::Insert, ClonedLoop.getExitingBlock(),
       OrigLoop.getLoopPreheader()));
@@ -323,6 +314,7 @@ static Loop *myCloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
     ParentLoop->addBasicBlockToLoop(NewPH, *LI);
 
   for (Loop *CurLoop : OrigLoop->getLoopsInPreorder()) {
+    LLVM_DEBUG(dbgs() << "KIT: Looking at loop " << *CurLoop << "\n");
     Loop *&NewLoop = LMap[CurLoop];
     if (!NewLoop) {
       NewLoop = LI->AllocateLoop();
