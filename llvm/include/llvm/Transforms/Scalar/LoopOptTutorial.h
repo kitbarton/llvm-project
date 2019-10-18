@@ -28,7 +28,6 @@ class LPMUpdater;
 
 /// This class splits the innermost loop in a loop nest in the middle.
 class LoopSplit {
-private:
 public:
   LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT)
       : LI(LI), SE(SE), DT(DT) {}
