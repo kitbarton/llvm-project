@@ -149,22 +149,6 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   Pred.getTerminator()->replaceUsesOfWith(&InsertBefore,
                                           NewLoop->getLoopPreheader());
 
-  // Recompute the dominator tree
-  DT.recalculate(F);
-
-  // Verify that the dominator tree and the loops are correct.
-#ifndef NDEBUG
-  assert(DT.verify(DominatorTree::VerificationLevel::Fast) &&
-           "Dominator tree is invalid");
-
-    L.verifyLoop();
-    NewLoop->verifyLoop();
-    if (L.getParentLoop())
-      L.getParentLoop()->verifyLoop();
-
-    LI.verify(DT);
-#endif
-
   return NewLoop;
 }
 
