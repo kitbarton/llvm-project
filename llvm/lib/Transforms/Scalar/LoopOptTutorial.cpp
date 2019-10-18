@@ -29,11 +29,6 @@ using namespace llvm;
 #define DEBUG_TYPE "loop-opt-tutorial"
 static const char *VerboseDebug = DEBUG_TYPE "-verbose";
 
-static cl::opt<bool>
-    Verify(DEBUG_TYPE "-verify", cl::Hidden,
-           cl::desc("Turn on DominatorTree and LoopInfo verification"),
-           cl::init(true));
-
 /// Clones a loop \p OrigLoop.  Returns the loop and the blocks in \p
 /// Blocks.
 /// Updates LoopInfo assuming the loop is dominated by block \p LoopDomBB.
@@ -170,16 +165,16 @@ Loop *LoopSplit::cloneLoop(Loop &L, BasicBlock &InsertBefore,
   DTU.flush();
 
   // Verify that the dominator tree and the loops are correct.
-  if (Verify) {
-    assert(DT.verify(DominatorTree::VerificationLevel::Full) &&
-           "Dominator tree is invalid");
-    L.verifyLoop();
-    NewLoop->verifyLoop();
-    if (L.getParentLoop())
-      L.getParentLoop()->verifyLoop();
+#ifndef NDEBUG
+  assert(DT.verify(DominatorTree::VerificationLevel::Full) &&
+         "Dominator tree is invalid");
+  L.verifyLoop();
+  NewLoop->verifyLoop();
+  if (L.getParentLoop())
+    L.getParentLoop()->verifyLoop();
 
-    LI.verify(DT);
-  }
+  LI.verify(DT);
+#endif
 
   return NewLoop;
 }
