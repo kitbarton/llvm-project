@@ -32,11 +32,11 @@ public:
   LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT)
       : LI(LI), SE(SE), DT(DT) {}
 
-  // Execute the transformation on the loop nest rooted by \p L.
+  /// Execute the transformation on the loop nest rooted by \p L.
   bool run(Loop &L) const;
 
 private:
-  /// Determines if \p L is a candidate for splitting
+  /// Determines if \p L is a candidate for splitting.
   bool isCandidate(const Loop &L) const;
 
   /// Split the given loop in the middle by creating a new loop that traverse
@@ -44,7 +44,7 @@ private:
   /// bounds of \p L to traverse the remaining half.
   /// Note: \p L is expected to be the innermost loop in a loop nest or a top
   /// level loop.
-  bool splitLoopInHalf(Loop &L) const;
+  bool splitLoop(Loop &L) const;
 
   /// Clone loop \p L and insert the cloned loop before the basic block \p
   /// InsertBefore, \p Pred is the predecessor of \p L.

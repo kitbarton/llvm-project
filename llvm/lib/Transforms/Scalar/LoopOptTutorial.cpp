@@ -55,7 +55,7 @@ bool LoopSplit::run(Loop &L) const {
   LLVM_DEBUG(dbgs() << "Loop " << L.getName()
                     << " is a candidate for splitting!\n");
 
-  return splitLoopInHalf(L);
+  return splitLoop(L);
 }
 
 bool LoopSplit::isCandidate(const Loop &L) const {
@@ -83,7 +83,7 @@ bool LoopSplit::isCandidate(const Loop &L) const {
   return true;
 }
 
-bool LoopSplit::splitLoopInHalf(Loop &L) const {
+bool LoopSplit::splitLoop(Loop &L) const {
   assert(L.isLoopSimplifyForm() && "Expecting a loop in simplify form");
   assert(L.isSafeToClone() && "Loop is not safe to be cloned");
   assert(L.getSubLoops().empty() && "Expecting a innermost loop");
