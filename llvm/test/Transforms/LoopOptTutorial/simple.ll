@@ -1,61 +1,61 @@
-; RUN: opt -S -passes=loop-opt-tutorial -debug-only=loop-opt-tutorial < %s 2>&1 | FileCheck %s
+; RUN: opt -S -passes='loop(rotate,loop-opt-tutorial)' < %s 2>&1 | FileCheck %s
 ; REQUIRES: asserts
 
-@B = common global [1024 x i32] zeroinitializer, align 16
+; CHECK-LABEL: dep_free
+; CHECK-LABEL: entry:
+; CHECK-NEXT:   [[SUB:%[0-9]*]] = sub i64 100, 0
+; CHECK-NEXT:   [[SPLIT:%[0-9]*]] = udiv i64 [[SUB]], 2
+; CHECK-NEXT:   br label %[[L1_PREHEADER:.*]]
+; First loop:
+;    for (long i = 0; i < 100/2; ++i)
+;        ...
+; CHECK:      [[L1_PREHEADER]]:
+; CHECK-NEXT:   br label %[[L1_HEADER:.*]]
+; CHECK:      [[L1_HEADER]]:
+; CHECK-NEXT:   [[L1_I:%i[0-9]*]] = phi i64 [ 0, %[[L1_PREHEADER]] ], [ [[L1_INCI:%inci[0-9]*]], %[[L1_LATCH:.*]] ]
+; CHECK:      br label %[[L1_LATCH]]
+; CHECK:      [[L1_LATCH]]:
+; CHECK-NEXT:   [[L1_INCI]] = add nuw nsw i64 [[L1_I]], 1
+; CHECK-NEXT:   [[L1_CMP:%exitcond[0-9]*]] = icmp ne i64 [[L1_INCI]], [[SPLIT]]
+; CHECK-NEXT:   br i1 [[L1_CMP]], label %[[L1_HEADER]], label %[[L2_PREHEADER:.*]]
 
-; CHECK: Entering LoopOptTutorialPass::run
-; CHECK: Entering LoopOptTutorialPass::run
+; Second loop:
+;    for (long i = 100/2; i < 100; ++i)
+;        ...
+; CHECK:      [[L2_PREHEADER]]:
+; CHECK-NEXT:   br label %[[L2_HEADER:.*]]
+; CHECK:      [[L2_HEADER]]:
+; CHECK-NEXT:   [[L2_I:%i[0-9]*]] = phi i64 [ [[SPLIT]], %[[L2_PREHEADER]] ], [ [[L2_INCI:%inci[0-9]*]], %[[L2_LATCH:.*]] ]
+; CHECK:      br label %[[L2_LATCH]]
+; CHECK:      [[L2_LATCH]]:
+; CHECK-NEXT:   [[L2_INCI]] = add nuw nsw i64 [[L2_I]], 1
+; CHECK-NEXT:   [[L2_CMP:%exitcond[0-9]*]] = icmp ne i64 [[L2_INCI]], 100
+; CHECK-NEXT:   br i1 [[L2_CMP]], label %[[L2_HEADER]], label %[[EXIT:.*]]
+; CHECK:      [[EXIT]]:
+
 define void @dep_free(i32* noalias %arg) {
-bb:
-  br label %bb5
+entry:
+  br label %header
 
-bb5:                                              ; preds = %bb14, %bb
-  %indvars.iv2 = phi i64 [ %indvars.iv.next3, %bb14 ], [ 0, %bb ]
-  %.01 = phi i32 [ 0, %bb ], [ %tmp15, %bb14 ]
-  %exitcond4 = icmp ne i64 %indvars.iv2, 100
-  br i1 %exitcond4, label %bb7, label %bb17
+header:                                             
+  %i = phi i64 [ %inci, %latch ], [ 0, %entry ]
+  %exitcond4 = icmp ne i64 %i, 100
+  br i1 %exitcond4, label %body, label %exit
 
-bb7:                                              ; preds = %bb5
-  %tmp = add nsw i32 %.01, -3
-  %tmp8 = add nuw nsw i64 %indvars.iv2, 3
-  %tmp9 = trunc i64 %tmp8 to i32
-  %tmp10 = mul nsw i32 %tmp, %tmp9
-  %tmp11 = trunc i64 %indvars.iv2 to i32
-  %tmp12 = srem i32 %tmp10, %tmp11
-  %tmp13 = getelementptr inbounds i32, i32* %arg, i64 %indvars.iv2
-  store i32 %tmp12, i32* %tmp13, align 4
-  br label %bb14
+body:                                             
+  %tmp = add nsw i64 %i, -3
+  %tmp8 = add nuw nsw i64 %i, 3
+  %tmp10 = mul nsw i64 %tmp, %tmp8
+  %tmp12 = srem i64 %tmp10, %i
+  %tmp13 = getelementptr inbounds i32, i32* %arg, i64 %i
+  %tmp14 = trunc i64 %tmp12 to i32
+  store i32 %tmp14, i32* %tmp13, align 4
+  br label %latch
 
-bb14:                                             ; preds = %bb7
-  %indvars.iv.next3 = add nuw nsw i64 %indvars.iv2, 1
-  %tmp15 = add nuw nsw i32 %.01, 1
-  br label %bb5
+latch:                                            
+  %inci = add nuw nsw i64 %i, 1
+  br label %header
 
-bb17:                                             ; preds = %bb27, %bb5
-  %indvars.iv = phi i64 [ %indvars.iv.next, %bb27 ], [ 0, %bb5 ]
-  %.0 = phi i32 [ 0, %bb5 ], [ %tmp28, %bb27 ]
-  %exitcond = icmp ne i64 %indvars.iv, 100
-  br i1 %exitcond, label %bb19, label %bb18
-
-bb18:                                             ; preds = %bb17
-  br label %bb29
-
-bb19:                                             ; preds = %bb17
-  %tmp20 = add nsw i32 %.0, -3
-  %tmp21 = add nuw nsw i64 %indvars.iv, 3
-  %tmp22 = trunc i64 %tmp21 to i32
-  %tmp23 = mul nsw i32 %tmp20, %tmp22
-  %tmp24 = trunc i64 %indvars.iv to i32
-  %tmp25 = srem i32 %tmp23, %tmp24
-  %tmp26 = getelementptr inbounds [1024 x i32], [1024 x i32]* @B, i64 0, i64 %indvars.iv
-  store i32 %tmp25, i32* %tmp26, align 4
-  br label %bb27
-
-bb27:                                             ; preds = %bb19
-  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
-  %tmp28 = add nuw nsw i32 %.0, 1
-  br label %bb17
-
-bb29:                                             ; preds = %bb18
+exit:                                            
   ret void
 }
