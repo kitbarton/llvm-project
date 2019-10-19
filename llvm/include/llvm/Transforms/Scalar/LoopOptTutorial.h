@@ -33,6 +33,10 @@ public:
 
 private:
   LoopInfo &LI;
+
+  /// Determines if \p L is a candidate for splitting
+  bool isCandidate(const Loop &L) const;
+
 };
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {
