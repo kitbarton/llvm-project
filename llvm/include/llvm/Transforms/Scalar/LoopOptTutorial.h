@@ -25,12 +25,15 @@ namespace llvm {
 
 class Loop;
 class LPMUpdater;
+class Statistic;
+class OptimizationRemarkEmitter;
 
 /// This class splits the innermost loop in a loop nest in the middle.
 class LoopSplit {
 public:
-  LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT)
-      : LI(LI), SE(SE), DT(DT) {}
+  LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT,
+            OptimizationRemarkEmitter &ORE)
+      : LI(LI), SE(SE), DT(DT), ORE(ORE) {}
 
   /// Execute the transformation on the loop nest rooted by \p L.
   bool run(Loop &L) const;
@@ -65,6 +68,15 @@ private:
                            BasicBlock &InsertBefore, BasicBlock &Pred,
                            ValueToValueMapTy &VMap) const;
 
+  /// Report that loop \p L that is not a candidate for splitting.
+  bool reportInvalidCandidate(const Loop &L, Statistic &Stat) const;
+
+  /// Report that loop \p L was successfully split.
+  void reportSuccess(const Loop &L, Statistic &Stat) const;
+
+  /// Report that loop \p L was not successfully split.
+  void reportFailure(const Loop &L, Statistic &Stat) const;
+
   // Dump the LLVM IR for function \p F.
   void dumpFunction(const StringRef Msg, const Function &F) const;
 
@@ -72,6 +84,7 @@ private:
   LoopInfo &LI;
   ScalarEvolution &SE;
   DominatorTree &DT;
+  OptimizationRemarkEmitter &ORE;
 };
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {
