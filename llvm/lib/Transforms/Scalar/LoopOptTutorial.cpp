@@ -50,7 +50,6 @@ bool LoopSplit::run(Loop &L) const {
   else
     LLVM_DEBUG(dbgs() << "Loop " << L.getName()
                       << " is not a candidate for splitting.\n");
-  
   return splitLoopInHalf(L);
 }
 
