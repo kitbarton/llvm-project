@@ -44,24 +44,20 @@ static Loop *myCloneLoopWithPreheader(BasicBlock *Before, BasicBlock *LoopDomBB,
 bool LoopSplit::run(Loop &L) const {
   LLVM_DEBUG(dbgs() << "Entering " << __func__ << "\n");
 
-  if (!isCandidate(L)) {
+  if (isCandidate(L))
     LLVM_DEBUG(dbgs() << "Loop " << L.getName()
-                      << " is not a candidate for splitting.\n");
-    return false;
-  }
-
-  LLVM_DEBUG(dbgs() << "Loop " << L.getName()
-                    << " is a candidate for splitting!\n");
+                      << " is a candidate for splitting!\n");
+  else
 
   return splitLoopInHalf(L);
 }
 
 bool LoopSplit::isCandidate(const Loop &L) const {
-  // Require loops with preheaders and dedicated exits.
+  // Require loops with preheaders and dedicated exits
   if (!L.isLoopSimplifyForm())
     return false;
 
-  // Since we use cloning to split the loop, it has to be safe to clone.
+  // Since we use cloning to split the loop, it has to be safe to clone
   if (!L.isSafeToClone())
     return false;
 
@@ -75,6 +71,7 @@ bool LoopSplit::isCandidate(const Loop &L) const {
 
   // Only split innermost loops. Thus, if the loop has any children, it cannot
   // be split.
+  //auto Children = L.getSubLoops();
   if (!L.getSubLoops().empty())
     return false;
 
