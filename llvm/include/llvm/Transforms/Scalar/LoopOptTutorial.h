@@ -25,18 +25,21 @@ namespace llvm {
 
 class Loop;
 class LPMUpdater;
+class Statistic;
+class OptimizationRemarkEmitter;
 
 /// This class splits the innermost loop in a loop nest in the middle.
 class LoopSplit {
 public:
-  LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT)
-      : LI(LI), SE(SE), DT(DT) {}
+  LoopSplit(LoopInfo &LI, ScalarEvolution &SE, DominatorTree &DT,
+            OptimizationRemarkEmitter &ORE)
+      : LI(LI), SE(SE), DT(DT), ORE(ORE) {}
 
-  // Execute the transformation on the loop nest rooted by \p L.
+  /// Execute the transformation on the loop nest rooted by \p L.
   bool run(Loop &L) const;
 
 private:
-  /// Determines if \p L is a candidate for splitting
+  /// Determines if \p L is a candidate for splitting.
   bool isCandidate(const Loop &L) const;
 
   /// Split the given loop in the middle by creating a new loop that traverse
@@ -44,7 +47,7 @@ private:
   /// bounds of \p L to traverse the remaining half.
   /// Note: \p L is expected to be the innermost loop in a loop nest or a top
   /// level loop.
-  bool splitLoopInHalf(Loop &L) const;
+  bool splitLoop(Loop &L) const;
 
   /// Clone loop \p L and insert the cloned loop before the basic block \p
   /// InsertBefore, \p Pred is the predecessor of \p L.
@@ -66,6 +69,15 @@ private:
                            BasicBlock &InsertBefore, BasicBlock &Pred,
                            ValueToValueMapTy &VMap) const;
 
+  /// Report that loop \p L that is not a candidate for splitting.
+  bool reportInvalidCandidate(const Loop &L, Statistic &Stat) const;
+
+  /// Report that loop \p L was successfully split.
+  void reportSuccess(const Loop &L, Statistic &Stat) const;
+
+  /// Report that loop \p L was not successfully split.
+  void reportFailure(const Loop &L, Statistic &Stat) const;
+
   // Dump the LLVM IR for function \p F.
   void dumpFunction(const StringRef Msg, const Function &F) const;
 
@@ -73,6 +85,7 @@ private:
   LoopInfo &LI;
   ScalarEvolution &SE;
   DominatorTree &DT;
+  OptimizationRemarkEmitter &ORE;
 };
 
 class LoopOptTutorialPass : public PassInfoMixin<LoopOptTutorialPass> {
