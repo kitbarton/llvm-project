@@ -190,7 +190,7 @@ Instruction *LoopSplit::computeSplitPoint(const Loop &L,
     BinaryOperator::Create(Instruction::Sub, &IVFinalVal, &IVInitialVal, "", InsertBefore);
 
   return BinaryOperator::Create(Instruction::UDiv, Sub,
-                                ConstantInt::get(IVFinalVal.getType(), 2), 
+                                ConstantInt::get(IVFinalVal.getType(), 2),
                                 "", InsertBefore);
 }
 
