@@ -57,7 +57,7 @@ private:
   Instruction *computeSplitPoint(const Loop &L,
                                  Instruction *InsertBefore) const;
 
-  
+
   /// Get the latch comparison instruction of loop \p L.
   ICmpInst *getLatchCmpInst(const Loop &L) const;
 
