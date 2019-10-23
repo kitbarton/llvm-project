@@ -93,7 +93,7 @@ bool LoopSplit::splitLoopInHalf(Loop &L) const {
 
   // Generate the code that computes the split point.
   Instruction *Split =
-      computeSplitPoint(L, L.getLoopPreheader()->getTerminator());
+    computeSplitPoint(L, L.getLoopPreheader()->getTerminator());
 
   // Split the loop preheader to create an insertion point for the cloned loop.
   BasicBlock *Preheader = L.getLoopPreheader();
@@ -186,12 +186,12 @@ Instruction *LoopSplit::computeSplitPoint(const Loop &L,
 
   Value &IVInitialVal = Bounds->getInitialIVValue();
   Value &IVFinalVal = Bounds->getFinalIVValue();
-  auto *Sub = BinaryOperator::Create(Instruction::Sub, &IVFinalVal,
-                                     &IVInitialVal, "", InsertBefore);
+  auto *Sub =
+    BinaryOperator::Create(Instruction::Sub, &IVFinalVal, &IVInitialVal, "", InsertBefore);
 
   return BinaryOperator::Create(Instruction::UDiv, Sub,
-                                ConstantInt::get(IVFinalVal.getType(), 2), "",
-                                InsertBefore);
+                                ConstantInt::get(IVFinalVal.getType(), 2), 
+                                "", InsertBefore);
 }
 
 ICmpInst *LoopSplit::getLatchCmpInst(const Loop &L) const {
@@ -233,7 +233,6 @@ static Loop *myCloneLoopWithPreheader(
   BasicBlock *OrigPH = OrigLoop->getLoopPreheader();
   assert(OrigPH && "No preheader");
   BasicBlock *NewPH = CloneBasicBlock(OrigPH, VMap, NameSuffix, F);
-
   // To rename the loop PHIs.
   VMap[OrigPH] = NewPH;
   Blocks.push_back(NewPH);
